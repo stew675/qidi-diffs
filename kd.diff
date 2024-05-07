@@ -1,0 +1,118 @@
+Only in qidi-klipper/klippy/extras: tmc2240.py
+Only in qidi-klipper/klippy/extras: x_twist_compensation.py
+Only in qidi-klipper/: LICENSE
+diff -r -b -Z klipper/klippy/extras/angle.py qidi-klipper/klippy/extras/angle.py
+12c12
+< TRINAMIC_DRIVERS = ["tmc2130", "tmc2208", "tmc2209", "tmc2660", "tmc5160"]
+---
+> TRINAMIC_DRIVERS = ["tmc2130", "tmc2208", "tmc2209", "tmc2240", "tmc2660", "tmc5160"]
+diff -r -b -Z klipper/klippy/extras/endstop_phase.py qidi-klipper/klippy/extras/endstop_phase.py
+9c9
+< TRINAMIC_DRIVERS = ["tmc2130", "tmc2208", "tmc2209", "tmc2660", "tmc5160"]
+---
+> TRINAMIC_DRIVERS = ["tmc2130", "tmc2208", "tmc2209", "tmc2240", "tmc2660", "tmc5160"]
+diff -r -b -Z klipper/klippy/extras/force_move.py qidi-klipper/klippy/extras/force_move.py
+46,48d45
+<         if config.getboolean("enable_force_move", False):
+<             gcode.register_command('FORCE_MOVE', self.cmd_FORCE_MOVE,
+<                                    desc=self.cmd_FORCE_MOVE_help)
+51a49,51
+>         if config.getboolean("enable_force_move", False):
+>             gcode.register_command('FORCE_MOVE', self.cmd_FORCE_MOVE,
+>                                    desc=self.cmd_FORCE_MOVE_help)
+133a134
+>     
+diff -r -b -Z klipper/klippy/extras/probe.py qidi-klipper/klippy/extras/probe.py
+129a130,137
+>         # get z compensation from x_twist
+>         # x_twist module checks if it is enabled, returns 0 compensation if not
+>         x_twist_compensation = self.printer.lookup_object(
+>             'x_twist_compensation', None)
+>         z_compensation = 0 if not x_twist_compensation \
+>             else x_twist_compensation.get_z_compensation_value(pos[0])
+>         # add z compensation to probe position
+>         epos[2] += z_compensation
+199c207,210
+<                 'last_z_result': self.last_z_result}
+---
+>                 'last_z_result': self.last_z_result,
+>                 'x_offset': self.x_offset,
+>                 'y_offset': self.y_offset,
+>                 'z_offset': self.z_offset}
+251c262,263
+<         configfile.set(self.name, 'z_offset', "%.3f" % (z_offset,))
+---
+>         # configfile.set(self.name, 'z_offset', "%.3f" % (z_offset,))
+>         configfile.set(self.name, 'z_offset', "%.3f" % (0.000,))
+265c277,278
+<         self._move(curpos, self.speed)
+---
+>         #PwAddNew
+>         self._move(curpos,80.)
+diff -r -b -Z klipper/klippy/extras/spi_temperature.py qidi-klipper/klippy/extras/spi_temperature.py
+219c219
+< MAX6675_MULT = 0.25
+---
+> MAX6675_MULT = 0.25 * 0.95
+diff -r -b -Z klipper/klippy/extras/tmc.py qidi-klipper/klippy/extras/tmc.py
+111a112,114
+>         # elif name_parts[0] == 'tmc2240':
+>         #     self.clear_gstat = False
+>         #     cs_actual_mask = self.fields.all_fields[reg_name]["cs_actual"]
+472a476
+>             logging.info("##############################")
+478a483
+>             logging.info("******************************")
+537a543,560
+> 
+> # Helper to configure "stealthchop" mode
+> def TMC2240StealthchopHelper(config, mcu_tmc, tmc_freq):
+>     fields = mcu_tmc.get_fields()
+>     en_pwm_mode = True
+>     velocity = config.getfloat('stealthchop_threshold', 0., minval=0.)
+>     if velocity:
+>         stepper_name = " ".join(config.get_name().split()[1:])
+>         sconfig = config.getsection(stepper_name)
+>         rotation_dist, steps_per_rotation = stepper.parse_step_distance(sconfig)
+>         step_dist = rotation_dist / steps_per_rotation
+>         step_dist_256 = step_dist / (1 << fields.get_field("mres"))
+>         threshold = int(tmc_freq * step_dist_256 / velocity + .5)
+>         fields.set_field("tpwmthrs", max(0, min(0xfffff, threshold)))
+>         en_pwm_mode = False
+>     reg = fields.lookup_register("en_pwm_mode", None)
+>     if reg is not None:
+>         fields.set_field("en_pwm_mode", en_pwm_mode)
+diff -r -b -Z klipper/klippy/extras/virtual_sdcard.py qidi-klipper/klippy/extras/virtual_sdcard.py
+6c6,8
+< import os, logging
+---
+> import os, sys, logging
+> reload(sys)
+> sys.setdefaultencoding('utf-8')
+diff -r -b -Z klipper/klippy/gcode.py qidi-klipper/klippy/gcode.py
+109c109
+<                     'RESTART', 'FIRMWARE_RESTART', 'ECHO', 'STATUS', 'HELP']
+---
+>                     'RESTART', 'FIRMWARE_RESTART', 'ECHO', 'STATUS', 'HELP', 'CLOSE_MCU_PORT']
+165c165
+<         self.gcode_handlers = self.base_gcode_handlers
+---
+>         # self.gcode_handlers = self.base_gcode_handlers
+331a332,334
+>     def cmd_CLOSE_MCU_PORT(self, gcmd):
+>         self.request_restart('close_mcu_port')
+>     cmd_CLOSE_MCU_PORT_help = "Close the port of mcu"
+diff -r -b -Z klipper/klippy/klippy.py qidi-klipper/klippy/klippy.py
+235a236,238
+>             if run_result == 'close_mcu_port':
+>                 for n, m in self.lookup_objects(module='mcu'):
+>                     m.microcontroller_close_port()
+diff -r -b -Z klipper/klippy/mcu.py qidi-klipper/klippy/mcu.py
+128c128
+< TRSYNC_TIMEOUT = 0.025
+---
+> TRSYNC_TIMEOUT = 0.10
+922a923,925
+>     def microcontroller_close_port(self):
+>         logging.info("Self define cmd: close Port ")
+>         self._disconnect()

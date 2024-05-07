@@ -1,0 +1,292 @@
+diff -r -b -Z moonraker/moonraker/components/file_manager/metadata.py qidi-moonraker/moonraker/components/file_manager/metadata.py
+94c94
+<         return match.group(1)
+---
+>         return match.group(1).strip('"')
+103a104
+>         self.has_m486_objects: bool = False
+139c140,143
+<         match = re.search(r"\nDEFINE_OBJECT NAME=", data)
+---
+>         match = re.search(
+>             r"\n((DEFINE_OBJECT)|(EXCLUDE_OBJECT_DEFINE)) NAME=",
+>             data
+>         )
+141c145,155
+<             # Objects alread processed
+---
+>             # Objects already processed
+>             fname = os.path.basename(self.path)
+>             log_to_stderr(
+>                 f"File '{fname}' currently supports cancellation, "
+>                 "processing aborted"
+>             )
+>             if match.group(1).startswith("DEFINE_OBJECT"):
+>                 log_to_stderr(
+>                     "Legacy object processing detected.  This is not "
+>                     "compatible with official versions of Klipper."
+>                 )
+148a163
+>                 self.has_m486_objects = regex == r"\nM486"
+197a213,215
+>     def parse_chamber_temp(self) -> Optional[float]:
+>         return None
+> 
+294a313,316
+>     def parse_chamber_temp(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"M191 S(\d+\.?\d*)", self.header_data)
+> 
+300a323
+>             'QIDISlicer': r"QIDISlicer\s(.*)\son",
+303c326,329
+<             'SliCR-3D': r"SliCR-3D\s(.*)\son"
+---
+>             'OrcaSlicer': r"OrcaSlicer\s(.*)\son",
+>             'SliCR-3D': r"SliCR-3D\s(.*)\son",
+>             'BambuStudio': r"BambuStudio[^ ]*\s(.*)\n",
+>             'A3dp-Slicer': r"A3dp-Slicer\s(.*)\son",
+389a416,419
+>     def parse_chamber_temp(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"; chamber_temperature = (\d+\.?\d*)", self.footer_data)
+> 
+397a428,435
+>     def parse_gimage(self) -> Optional[str]:
+>         return _regex_find_string(
+>             r";gimage:(.*)", self.footer_data)
+> 
+>     def parse_simage(self) -> Optional[str]:
+>         return _regex_find_string(
+>             r";simage:(.*)", self.footer_data)
+> 
+493a532,535
+>     def parse_chamber_temp(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"M191 S(\d+\.?\d*)", self.header_data)
+> 
+537a580,587
+>     def parse_gimage(self) -> Optional[str]:
+>         return _regex_find_string(
+>             r";gimage:(.*)", self.header_data)
+> 
+>     def parse_simage(self) -> Optional[str]:
+>         return _regex_find_string(
+>             r";simage:(.*)", self.header_data)
+> 
+541a592,593
+>             self._version = match.group(1)
+>             self._is_v5 = self._version.startswith("5")
+561c613,615
+<             r";\s+Filament\slength:\s(\d+\.?\d*)\smm", self.footer_data)
+---
+>             r";\s+(?:Filament\slength|Material\sLength):\s(\d+\.?\d*)\smm",
+>             self.footer_data
+>         )
+565c619,621
+<             r";\s+Plastic\sweight:\s(\d+\.?\d*)\sg", self.footer_data)
+---
+>             r";\s+(?:Plastic\sweight|Material\sWeight):\s(\d+\.?\d*)\sg",
+>             self.footer_data
+>         )
+570a627,630
+>     def parse_filament_type(self) -> Optional[str]:
+>         return _regex_find_string(
+>             r";\s+makerBotModelMaterial,(.*)", self.footer_data)
+> 
+573c633
+<             r';\s+Build time:.*', self.footer_data)
+---
+>             r';\s+Build (t|T)ime:.*', self.footer_data)
+605a666,679
+>     def _get_first_layer_temp_v5(self, heater_type: str) -> Optional[float]:
+>         pattern = (
+>             r";\s+temperatureController,.+?"
+>             r";\s+temperatureType,"f"{heater_type}"r".+?"
+>             r";\s+temperatureSetpoints,\d+\|(\d+)"
+>         )
+>         match = re.search(pattern, self.header_data, re.MULTILINE | re.DOTALL)
+>         if match is not None:
+>             try:
+>                 return float(match.group(1))
+>             except Exception:
+>                 return None
+>         return None
+> 
+606a681,683
+>         if self._is_v5:
+>             return self._get_first_layer_temp_v5("extruder")
+>         else:
+609a687,689
+>         if self._is_v5:
+>             return self._get_first_layer_temp_v5("platform")
+>         else:
+614c694,696
+<             r";\s+extruderDiameter,(\d+\.\d*)", self.header_data)
+---
+>             r";\s+(?:extruderDiameter|nozzleDiameter),(\d+\.\d*)",
+>             self.header_data
+>         )
+664a747,750
+>     def parse_chamber_temp(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"; chamber_C = (\d+\.?\d*)", self.header_data)
+> 
+743a830,833
+>     def parse_chamber_temp(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"M191 S(\d+\.?\d*)", self.header_data)
+> 
+781a872,875
+>     def parse_chamber_temp(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r";\schamber_temp_degree_c\s:\s+(\d+\.?\d*)", self.header_data)
+> 
+809a904,964
+> class KiriMoto(BaseSlicer):
+>     def check_identity(self, data) -> Optional[Dict[str, Any]]:
+>         variants: Dict[str, str] = {
+>             "Kiri:Moto": r"; Generated by Kiri:Moto (\d.+)",
+>             "SimplyPrint": r"; Generated by Kiri:Moto \(SimplyPrint\) (.+)"
+>         }
+>         for name, pattern in variants.items():
+>             match = re.search(pattern, data)
+>             if match:
+>                 return {
+>                     "slicer": name,
+>                     "slicer_version": match.group(1)
+>                 }
+>         return None
+> 
+>     def parse_first_layer_height(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"; firstSliceHeight = (\d+\.\d+)", self.header_data
+>         )
+> 
+>     def parse_layer_height(self) -> Optional[float]:
+>         self.layer_height = _regex_find_first(
+>             r"; sliceHeight = (\d+\.\d+)", self.header_data
+>         )
+>         return self.layer_height
+> 
+>     def parse_object_height(self) -> Optional[float]:
+>         return self._parse_max_float(
+>             r"G1 Z\d+\.\d+ (?:; z-hop end|F\d+\n)",
+>             self.footer_data, strict=True
+>         )
+> 
+>     def parse_layer_count(self) -> Optional[int]:
+>         matches = re.findall(
+>             r";; --- layer (\d+) \(.+", self.footer_data
+>         )
+>         if not matches:
+>             return None
+>         try:
+>             return int(matches[-1]) + 1
+>         except Exception:
+>             return None
+> 
+>     def parse_estimated_time(self) -> Optional[float]:
+>         return _regex_find_int(r"; --- print time: (\d+)s", self.footer_data)
+> 
+>     def parse_filament_total(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"; --- filament used: (\d+\.?\d*) mm", self.footer_data
+>         )
+> 
+>     def parse_first_layer_extr_temp(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"; firstLayerNozzleTemp = (\d+\.?\d*)", self.header_data
+>         )
+> 
+>     def parse_first_layer_bed_temp(self) -> Optional[float]:
+>         return _regex_find_first(
+>             r"; firstLayerBedTemp = (\d+\.?\d*)", self.header_data
+>         )
+> 
+814c969
+<     KISSlicer, IdeaMaker, IceSL
+---
+>     KISSlicer, IdeaMaker, IceSL, KiriMoto
+816a972,973
+>     'gimage',
+>     'simage',
+826a984
+>     'chamber_temp',
+833c991
+< def process_objects(file_path: str) -> bool:
+---
+> def process_objects(file_path: str, slicer: BaseSlicer, name: str) -> bool:
+835c993,998
+<         from preprocess_cancellation import preprocessor
+---
+>         from preprocess_cancellation import (
+>             preprocess_slicer,
+>             preprocess_cura,
+>             preprocess_ideamaker,
+>             preprocess_m486
+>         )
+840c1003,1006
+<     log_to_stderr(f"Performing Object Processing on file: {fname}")
+---
+>     log_to_stderr(
+>         f"Performing Object Processing on file: {fname}, "
+>         f"sliced by {name}"
+>     )
+845c1011,1032
+<                 preprocessor(in_file, out_file)
+---
+>                 try:
+>                     if slicer.has_m486_objects:
+>                         processor = preprocess_m486
+>                     elif isinstance(slicer, PrusaSlicer):
+>                         processor = preprocess_slicer
+>                     elif isinstance(slicer, Cura):
+>                         processor = preprocess_cura
+>                     elif isinstance(slicer, IdeaMaker):
+>                         processor = preprocess_ideamaker
+>                     else:
+>                         log_to_stderr(
+>                             f"Object Processing Failed, slicer {name}"
+>                             "not supported"
+>                         )
+>                         return False
+>                     for line in processor(in_file):
+>                         out_file.write(line)
+>                 except Exception as e:
+>                     log_to_stderr(f"Object processing failed: {e}")
+>                     return False
+>         if os.path.islink(file_path):
+>             file_path = os.path.realpath(file_path)
+884c1071,1072
+<         if process_objects(file_path):
+---
+>         name = ident.get("slicer", "unknown")
+>         if process_objects(file_path, slicer, name):
+913a1102,1103
+>             if os.path.islink(dest_path):
+>                 dest_path = os.path.realpath(dest_path)
+diff -r -b -Z moonraker/moonraker/components/machine.py qidi-moonraker/moonraker/components/machine.py
+104a105,111
+>         self.server.register_endpoint(
+>             "/machine/system_info", ['POST'],
+>             self._handle_sysinfo_request)
+>         # self.server.register_endpoint(
+>             # "/machine/dev_name", ['GET'],
+>             # self._handle_devname_request)
+> 
+196a204,214
+>         # with open('../../../../../root/www/dev_info.txt', 'r') as f:
+>         dev_name = web_request.get_str('dev_name',default=None)
+>         if dev_name !=None:
+>             Note=open('dev_info.txt',mode='w')   
+>             Note.write(dev_name)   
+>             Note.close()
+>         # path=os.path.abspath('.')
+>         with open('dev_info.txt', 'r') as f:         
+>             content = f.read() 
+>             f.close()
+>         self.system_info["machine_name"] =  content            
+197a216,217
+> 
+> 
